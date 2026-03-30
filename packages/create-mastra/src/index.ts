@@ -61,7 +61,7 @@ program
       await create({
         components: ['agents', 'tools', 'workflows', 'scorers'],
         llmProvider: 'openai',
-        addExample: true,
+        addExample: args.example !== false,
         createVersionTag,
         timeout,
         projectName,
