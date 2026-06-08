@@ -79,6 +79,15 @@ export interface WorkspaceSkillsImplConfig {
 /**
  * Implementation of WorkspaceSkills interface.
  */
+
+/**
+ * Splits a path on both forward and back slashes.
+ * Handles Windows absolute paths (e.g. C:\Users\me\skill) and POSIX paths alike.
+ */
+function splitPathSegments(p: string): string[] {
+  return p.split(/[\\/]+/);
+}
+
 export class WorkspaceSkillsImpl implements WorkspaceSkills {
   readonly #source: SkillSourceInterface;
   readonly #skillsResolver: SkillsResolver;
@@ -313,10 +322,10 @@ export class WorkspaceSkillsImpl implements WorkspaceSkills {
     let dirName: string;
     if (skillPath.endsWith('/SKILL.md') || skillPath === 'SKILL.md') {
       skillFilePath = skillPath;
-      dirName = this.#getParentPath(skillPath).split('/').pop() || 'unknown';
+      dirName = splitPathSegments(this.#getParentPath(skillPath)).pop() || 'unknown';
     } else {
       skillFilePath = this.#joinPath(skillPath, 'SKILL.md');
-      dirName = skillPath.split('/').pop() || 'unknown';
+      dirName = splitPathSegments(skillPath).pop() || 'unknown';
     }
 
     // Determine source from existing resolved paths
@@ -770,7 +779,7 @@ export class WorkspaceSkillsImpl implements WorkspaceSkills {
         }
 
         const skillDir = this.#getParentPath(skillsPath);
-        const dirName = skillDir.split('/').pop() || skillDir;
+        const dirName = splitPathSegments(skillDir).pop() || skillDir;
 
         try {
           const skill = await this.#parseSkillFile(skillsPath, dirName, source);
@@ -788,7 +797,7 @@ export class WorkspaceSkillsImpl implements WorkspaceSkills {
       if (await this.#source.exists(skillsPath)) {
         const skillFilePath = this.#joinPath(skillsPath, 'SKILL.md');
         if (await this.#source.exists(skillFilePath)) {
-          const dirName = skillsPath.split('/').pop() || skillsPath;
+          const dirName = splitPathSegments(skillsPath).pop() || skillsPath;
 
           try {
             const skill = await this.#parseSkillFile(skillFilePath, dirName, source);
@@ -1214,11 +1223,11 @@ export class WorkspaceSkillsImpl implements WorkspaceSkills {
    */
   #determineSource(skillsPath: string): ContentSource {
     // Use path segment matching to avoid false positives (e.g., my-node_modules)
-    const segments = skillsPath.split('/');
+    const segments = splitPathSegments(skillsPath);
     if (segments.includes('node_modules')) {
       return { type: 'external', packagePath: skillsPath };
     }
-    if (skillsPath.includes('/.mastra/skills') || skillsPath.startsWith('.mastra/skills')) {
+    if (skillsPath.includes('/.mastra/skills') || skillsPath.includes('\\.mastra\\skills') || skillsPath.startsWith('.mastra/skills') || skillsPath.startsWith('.mastra\\skills')) {
       return { type: 'managed', mastraPath: skillsPath };
     }
     return { type: 'local', projectPath: skillsPath };
@@ -1251,8 +1260,11 @@ export class WorkspaceSkillsImpl implements WorkspaceSkills {
    * Get parent path
    */
   #getParentPath(path: string): string {
-    const lastSlash = path.lastIndexOf('/');
-    return lastSlash > 0 ? path.substring(0, lastSlash) : '/';
+    // Normalize: find last separator whether '/' or '\'
+    const lastSep = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    if (lastSep === -1) return '.';
+    if (lastSep === 0) return '/';
+    return path.slice(0, lastSep);
   }
 }
 
