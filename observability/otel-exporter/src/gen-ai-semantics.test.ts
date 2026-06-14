@@ -1,5 +1,5 @@
 import { SpanType } from '@mastra/core/observability';
-import type { AnyExportedSpan, ModelGenerationAttributes, UsageStats } from '@mastra/core/observability';
+import type { AnyExportedSpan, ModelGenerationAttributes, RagEmbeddingAttributes, UsageStats } from '@mastra/core/observability';
 import { describe, it, expect } from 'vitest';
 import { getAttributes, formatUsageMetrics } from './gen-ai-semantics';
 
@@ -99,5 +99,62 @@ describe('formatUsageMetrics', () => {
   it('should return empty metrics for undefined usage', () => {
     const result = formatUsageMetrics(undefined);
     expect(result).toEqual({});
+  });
+});
+
+function createRagEmbeddingSpan(attributes: RagEmbeddingAttributes): AnyExportedSpan {
+  return {
+    id: 'test-span-id',
+    traceId: 'test-trace-id',
+    name: 'rag_embedding test-embedding-model',
+    type: SpanType.RAG_EMBEDDING,
+    startTime: new Date(),
+    isRootSpan: false,
+    isEvent: false,
+    attributes,
+  } as AnyExportedSpan;
+}
+
+describe('getAttributes - RAG_EMBEDDING spans', () => {
+  it('sets gen_ai.operation.name to "embeddings"', () => {
+    const span = createRagEmbeddingSpan({ model: 'text-embedding-3-small', provider: 'openai' });
+    const attrs = getAttributes(span);
+    expect(attrs['gen_ai.operation.name']).toBe('embeddings');
+  });
+
+  it('maps model to gen_ai.request.model', () => {
+    const span = createRagEmbeddingSpan({ model: 'text-embedding-3-small', provider: 'openai' });
+    const attrs = getAttributes(span);
+    expect(attrs['gen_ai.request.model']).toBe('text-embedding-3-small');
+  });
+
+  it('maps provider to gen_ai.system via normalizeProvider', () => {
+    const span = createRagEmbeddingSpan({ model: 'text-embedding-3-small', provider: 'openai' });
+    const attrs = getAttributes(span);
+    expect(attrs['gen_ai.provider.name']).toBe('openai');
+  });
+
+  it('maps usage.inputTokens to gen_ai.usage.input_tokens', () => {
+    const span = createRagEmbeddingSpan({
+      model: 'text-embedding-3-small',
+      provider: 'openai',
+      usage: { inputTokens: 42, outputTokens: 0 },
+    });
+    const attrs = getAttributes(span);
+    expect(attrs['gen_ai.usage.input_tokens']).toBe(42);
+  });
+
+  it('preserves embedding-specific metadata on mastra.rag_embedding.* attributes', () => {
+    const span = createRagEmbeddingSpan({
+      model: 'text-embedding-3-small',
+      provider: 'openai',
+      dimensions: 1536,
+      inputCount: 10,
+      mode: 'ingest',
+    });
+    const attrs = getAttributes(span);
+    expect(attrs['mastra.rag_embedding.dimensions']).toBe(1536);
+    expect(attrs['mastra.rag_embedding.input_count']).toBe(10);
+    expect(attrs['mastra.rag_embedding.mode']).toBe('ingest');
   });
 });

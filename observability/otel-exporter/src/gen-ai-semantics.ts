@@ -15,6 +15,7 @@ import type {
   AnyExportedSpan,
   MCPToolCallAttributes,
   ModelGenerationAttributes,
+  RagEmbeddingAttributes,
   ToolCallAttributes,
   UsageStats,
 } from '@mastra/core/observability';
@@ -123,6 +124,8 @@ function getOperationName(span: AnyExportedSpan): string {
       return 'invoke_agent';
     case SpanType.WORKFLOW_RUN:
       return 'invoke_workflow';
+    case SpanType.RAG_EMBEDDING:
+      return 'embeddings';
     default:
       return span.type.toLowerCase();
   }
@@ -138,6 +141,11 @@ function getSpanIdentifier(span: AnyExportedSpan): string | undefined {
   switch (span.type) {
     case SpanType.MODEL_GENERATION: {
       const attrs = span.attributes as ModelGenerationAttributes;
+      return attrs?.model;
+    }
+
+    case SpanType.RAG_EMBEDDING: {
+      const attrs = span.attributes as RagEmbeddingAttributes;
       return attrs?.model;
     }
 
@@ -330,6 +338,33 @@ export function getAttributes(span: AnyExportedSpan): Attributes {
     // attributes[ATTR_GEN_AI_REQUEST_MODEL] = agentAttrs.model.name;
 
     attributes[ATTR_GEN_AI_SYSTEM_INSTRUCTIONS] = agentAttrs.instructions;
+  }
+
+  // Add RAG embedding-specific attributes
+  if (span.type === SpanType.RAG_EMBEDDING && span.attributes) {
+    const embeddingAttrs = span.attributes as RagEmbeddingAttributes;
+
+    if (embeddingAttrs.model) {
+      attributes[ATTR_GEN_AI_REQUEST_MODEL] = embeddingAttrs.model;
+    }
+
+    if (embeddingAttrs.provider) {
+      attributes[ATTR_GEN_AI_PROVIDER_NAME] = normalizeProvider(embeddingAttrs.provider);
+    }
+
+    // Token usage — same UsageStats shape as MODEL_GENERATION for cost pipelines
+    Object.assign(attributes, formatUsageMetrics(embeddingAttrs.usage));
+
+    // Embedding-specific metadata
+    if (embeddingAttrs.dimensions !== undefined) {
+      attributes['mastra.rag_embedding.dimensions'] = embeddingAttrs.dimensions;
+    }
+    if (embeddingAttrs.inputCount !== undefined) {
+      attributes['mastra.rag_embedding.input_count'] = embeddingAttrs.inputCount;
+    }
+    if (embeddingAttrs.mode !== undefined) {
+      attributes['mastra.rag_embedding.mode'] = embeddingAttrs.mode;
+    }
   }
 
   // Add error information if present

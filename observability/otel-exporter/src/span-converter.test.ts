@@ -232,6 +232,21 @@ describe('SpanConverter', () => {
       const result = await converter.convertSpan(span);
       expect(result.kind).toBe(SpanKind.CLIENT);
     });
+    it('should use CLIENT for RAG embedding spans', async () => {
+      const span = {
+        id: 'span-1',
+        traceId: 'trace-1',
+        name: 'rag-embedding',
+        type: SpanType.RAG_EMBEDDING,
+        startTime: new Date(),
+        endTime: new Date(),
+        isEvent: false,
+        isRootSpan: false,
+        attributes: { model: 'text-embedding-3-small', provider: 'openai' },
+      } as any;
+      const result = await converter.convertSpan(span);
+      expect(result.kind).toBe(SpanKind.CLIENT);
+    });
   });
 
   // =============================================================================

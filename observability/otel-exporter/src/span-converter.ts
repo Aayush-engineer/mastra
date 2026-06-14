@@ -190,6 +190,7 @@ export function getSpanKind(type: SpanType): SpanKind {
   switch (type) {
     case SpanType.MODEL_GENERATION:
     case SpanType.MCP_TOOL_CALL:
+    case SpanType.RAG_EMBEDDING:
       return SpanKind.CLIENT;
     default:
       return SpanKind.INTERNAL;
