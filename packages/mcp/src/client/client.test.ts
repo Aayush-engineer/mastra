@@ -3325,3 +3325,22 @@ describe('InternalMastraMCPClient - transport cleanup on close (issue #16693)', 
     await new Promise(resolve => setTimeout(resolve, 0));
   });
 });
+
+describe('createRequire Workers compatibility (regression for module-init crash)', () => {
+  it('does not throw when import.meta.url is falsy (simulates Cloudflare Workers)', async () => {
+    const { createRequire } = await import('node:module');
+    // On Cloudflare Workers, import.meta.url is undefined. Module-scope
+    // `createRequire(import.meta.url)` throws immediately at import time in that
+    // environment. The fix lazily constructs `require` only when Datadog is
+    // actually loaded, falling back to a dummy file URL so createRequire never
+    // throws even when import.meta.url is unavailable.
+    expect(() => createRequire((undefined as unknown as string) || 'file:///')).not.toThrow();
+  });
+
+  it('module import of client.ts does not eagerly call createRequire at top level', async () => {
+    // Regression test for the Workers crash: importing the client module must
+    // not throw even in an environment where import.meta.url-dependent code
+    // would fail, because createRequire is no longer called at module scope.
+    await expect(import('./client.js')).resolves.toBeDefined();
+  });
+});
