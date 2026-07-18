@@ -339,3 +339,50 @@ export function aiV5PromptToAIV6Prompt(prompt: LanguageModelV2Prompt): LanguageM
     return messageModified ? { ...message, content } : message;
   }) as LanguageModelV2Prompt;
 }
+
+/**
+ * Convert a V2 (AI SDK v5 / spec `v2`) prompt into the shape AI SDK v7
+ * (spec `v4`, `LanguageModelV4`) providers expect, by translating tool-result
+ * `media` parts into the tagged `file` content part v4 providers consume:
+ * `{ type: 'file', data: { type: 'data', data }, mediaType }`.
+ *
+ * This is the spec-v4 counterpart of `aiV5PromptToAIV6Prompt` above. Spec-v4
+ * providers (e.g. `@ai-sdk/amazon-bedrock@5`) removed the spec-v3
+ * `image-data`/`file-data` content parts entirely and only accept `text` or
+ * `file` tool-result content, so v3-targeted conversion must not be reused
+ * here even though `v3` and `v4` models were previously folded together.
+ *
+ * This MUST only run for v4 providers: v5 providers accept raw `media` and
+ * v3 providers require `image-data`/`file-data`, so this conversion would
+ * break either of those if applied to them.
+ *
+ * See: https://github.com/mastra-ai/mastra/issues/19658
+ */
+export function aiV5PromptToAIV7Prompt(prompt: LanguageModelV2Prompt): LanguageModelV2Prompt {
+  return prompt.map(message => {
+    if (message.role !== `tool`) return message;
+
+    let messageModified = false;
+    const content = message.content.map(part => {
+      if (part.type !== `tool-result`) return part;
+      const output = part.output as { type?: unknown; value?: unknown } | undefined;
+      if (!output || output.type !== `content` || !Array.isArray(output.value)) return part;
+
+      let outputModified = false;
+      const value = (output.value as unknown[]).map(item => {
+        if (item == null || typeof item !== `object`) return item;
+        const contentPart = item as Record<string, unknown>;
+        if (contentPart.type !== `media` || typeof contentPart.data !== `string`) return item;
+        outputModified = true;
+        const mediaType = typeof contentPart.mediaType === `string` ? contentPart.mediaType : ``;
+        return { type: `file`, data: { type: `data`, data: contentPart.data }, mediaType };
+      });
+
+      if (!outputModified) return part;
+      messageModified = true;
+      return { ...part, output: { ...output, value } };
+    });
+
+    return messageModified ? { ...message, content } : message;
+  }) as LanguageModelV2Prompt;
+}
